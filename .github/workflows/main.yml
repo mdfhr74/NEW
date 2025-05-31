@@ -1,0 +1,33 @@
+name: Windows RDP with Pinggy
+
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Download Pinggy
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/pinggy-io/pinggy/releases/download/v0.1.0/pinggy-windows-amd64.exe" -OutFile pinggy.exe
+
+    - name: Enable RDP & Set Password
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+
+    - name: Start Pinggy TCP Tunnel
+      run: |
+        Start-Process -NoNewWindow -FilePath "$PWD\pinggy.exe" -ArgumentList "--proto tcp --port 3389 --auth-token $Env:PINGGY_AUTH_TOKEN"
+      env:
+        PINGGY_AUTH_TOKEN: ${{ secrets.PINGGY_AUTH_TOKEN }}
+
+    - name: Prevent Idle Timeout
+      run: |
+        for ($i = 0; $i -lt 720; $i++) {
+          Write-Output "Keeping alive... $i"
+          Start-Sleep -Seconds 30
+        }
